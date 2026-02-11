@@ -116,11 +116,11 @@ describe("er-state-account", () => {
     let account = await providerEphemeralRollup.connection.getAccountInfo(
       userAccount,
     );
-    console.log("User Account Info: ", account);
-    if (account) {
-      const randomValue = new anchor.BN(account.data.slice(40, 48), "le");
-      console.log("Random value: ", randomValue.toString());
-    }
+    // console.log("User Account Info: ", account);
+
+    const randomValue = new anchor.BN(account.data.slice(40, 48), "le");
+    console.log("Random value: ", randomValue.toString());
+
   });
 
   it("Update State and Commit to Base Layer!", async () => {
