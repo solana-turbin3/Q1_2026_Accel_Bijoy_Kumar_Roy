@@ -70,6 +70,8 @@ describe("er-state-account", () => {
   it("Call VRF on base layer", async () => {
     await program.methods.generateRandomData(0)
       .accountsPartial({
+        user: anchor.Wallet.local().publicKey,
+        userAccount: userAccount,
         oracleQueue: new PublicKey("Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh")
       }).rpc();
 
@@ -96,6 +98,8 @@ describe("er-state-account", () => {
 
   it("Execute VRF Delegated", async () => {
     let tx = await ephemeralProgram.methods.generateRandomData(0).accountsPartial({
+      user: anchor.Wallet.local().publicKey,
+      userAccount: userAccount,
       oracleQueue: new PublicKey("5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc")
     }).transaction();
     tx.feePayer = providerEphemeralRollup.wallet.publicKey;
