@@ -1,0 +1,44 @@
+use anchor_lang::prelude::*;
+use solana_gpt_oracle::Counter;
+
+use crate::state::Agent;
+
+#[derive(Accounts)]
+pub struct InitializeAgent<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + 32 + 1,
+        seeds = [b"agent"],
+        bump
+    )]
+    pub agent: Account<'info, Agent>,
+    /// CHECK: Checked in oracle program
+    #[account(mut)]
+    pub llm_context: AccountInfo<'info>,
+    #[account(mut)]
+    pub counter: Account<'info, Counter>,
+    pub system_program: Program<'info, System>,
+    /// CHECK: Checked oracle id
+    #[account(address = solana_gpt_oracle::ID)]
+    pub oracle_program: AccountInfo<'info>,
+}
+
+impl<'info> InitializeAgent<'info> {
+    pub fn initialize_agent(&mut self, agent_description: String) -> Result<()> {
+        self.agent.context = self.llm_context.key();
+        let cpi_program = self.oracle_program.to_account_info();
+        let cpi_accounts = solana_gpt_oracle::cpi::accounts::CreateLlmContext {
+            payer: self.payer.to_account_info(),
+            counter: self.counter.to_account_info(),
+            context_account: self.llm_context.to_account_info(),
+            system_program: self.system_program.to_account_info(),
+        };
+
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        solana_gpt_oracle::cpi::create_llm_context(cpi_ctx, agent_description)?;
+        Ok(())
+    }
+}
