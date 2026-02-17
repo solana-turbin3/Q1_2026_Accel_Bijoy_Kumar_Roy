@@ -22,7 +22,7 @@ pub mod gpt_oracle_tuktuk {
         Ok(())
     }
 
-    pub fn callback_from_agents(ctx: Context<CallbackFromAgent>, response: String) -> Result<()> {
+    pub fn callback_from_agent(ctx: Context<CallbackFromAgent>, response: String) -> Result<()> {
         ctx.accounts.callback_from_agent(response)?;
         Ok(())
     }

@@ -32,7 +32,7 @@ impl<'info> RunAgent<'info> {
         };
 
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-        let disc: [u8; 8] = crate::instruction::CallbackFromAgents::DISCRIMINATOR
+        let disc: [u8; 8] = crate::instruction::CallbackFromAgent::DISCRIMINATOR
             .try_into()
             .expect("Discriminator must be 8 bytes");
 

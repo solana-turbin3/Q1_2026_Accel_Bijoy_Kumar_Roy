@@ -10,7 +10,7 @@ pub struct InitializeAgent<'info> {
     #[account(
         init,
         payer = payer,
-        space = 8 + 32 + 1,
+        space = 8 + 32,
         seeds = [b"agent"],
         bump
     )]

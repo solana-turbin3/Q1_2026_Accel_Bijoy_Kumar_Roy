@@ -77,8 +77,26 @@ describe("gpt-oracle-tuktuk", () => {
       .rpc();
     console.log("Your transaction signature", tx);
   });
+  it("InteractAgent!", async () => {
+    const { agent, interactionAddress } = await GetAgentAndInteraction(
+      program,
+      provider,
+      program_llm
+    );
 
-  it("Schedule agent interaction", async () => {
+    const tx = await program.methods
+      .runAgent("Give me word of the day")
+      .accounts({
+        payer: provider.wallet.publicKey,
+        interaction: interactionAddress,
+        contextAccount: agent.context,
+      })
+      .rpc();
+    console.log("Your transaction signature", tx);
+  });
+
+
+  xit("Schedule agent interaction", async () => {
     let tuktukProgram = await init(provider);
 
     console.log(queueAuthority)
@@ -93,14 +111,14 @@ describe("gpt-oracle-tuktuk", () => {
     console.log(agent)
     console.log(interactionAddress)
     console.log(agentAddress)
-    const fundTx = new anchor.web3.Transaction().add(
-      anchor.web3.SystemProgram.transfer({
-        fromPubkey: provider.wallet.publicKey,
-        toPubkey: queueAuthority,
-        lamports: 28953600,
-      })
-    );
-    await provider.sendAndConfirm(fundTx);
+    // const fundTx = new anchor.web3.Transaction().add(
+    //   anchor.web3.SystemProgram.transfer({
+    //     fromPubkey: provider.wallet.publicKey,
+    //     toPubkey: queueAuthority,
+    //     lamports: 28953600,
+    //   })
+    // );
+    // await provider.sendAndConfirm(fundTx);
     let taskID = 4;
     const prompt = "Give me word of the day"
     const tx = await program.methods.schedule(prompt, taskID)
