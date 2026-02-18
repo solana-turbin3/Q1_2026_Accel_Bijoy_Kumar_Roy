@@ -390,6 +390,114 @@ fn setup_deposit(
     (vault_ata, tx)
 }
 
+fn setup_withdraw(
+    svm: &mut LiteSVM,
+    payer: &Keypair,
+    user: &Keypair,
+    user_ata: &Address,
+    mint: &Address,
+    vault: &Address,
+    vault_ata: &Address,
+    whitelist: &Address,
+    user_db: &Address,
+    extra_account_meta_list: &Address,
+    program_id: &Address,
+) -> (TransactionMetadata) {
+    let token_program = spl_token_2022::ID;
+
+    let withdraw_amount = 4 * LAMPORTS_PER_SOL;
+
+    let withdraw_accounts = transfer_enabled_vault::accounts::Withdraw {
+        user: from_address_to_pubkey(&user.pubkey()),
+        user_token_account: from_address_to_pubkey(user_ata),
+        vault: from_address_to_pubkey(vault),
+        user_db: from_address_to_pubkey(user_db),
+        vault_token_account: from_address_to_pubkey(vault_ata),
+        mint: from_address_to_pubkey(mint),
+        token_program,
+    }
+    .to_account_metas(None);
+
+    let withdraw_ix = Instruction {
+        program_id: *program_id,
+        accounts: withdraw_accounts
+            .into_iter()
+            .map(|m| solana_instruction::AccountMeta {
+                pubkey: from_pubkey_to_address(&m.pubkey),
+                is_signer: m.is_signer,
+                is_writable: m.is_writable,
+            })
+            .collect(),
+        data: transfer_enabled_vault::instruction::Withdraw {
+            amount: withdraw_amount,
+        }
+        .data(),
+    };
+
+    let cpi_ix = spl_token_2022::instruction::transfer_checked(
+        &token_program,
+        &from_address_to_pubkey(&vault_ata),
+        &from_address_to_pubkey(&mint),
+        &from_address_to_pubkey(&user_ata),
+        &from_address_to_pubkey(&user.pubkey()),
+        &[],
+        withdraw_amount,
+        9u8,
+    )
+    .unwrap();
+
+    let mut accounts: Vec<solana_instruction::AccountMeta> = cpi_ix
+        .accounts
+        .into_iter()
+        .map(|m| solana_instruction::AccountMeta {
+            pubkey: from_pubkey_to_address(&m.pubkey),
+            is_signer: m.is_signer,
+            is_writable: m.is_writable,
+        })
+        .collect();
+
+    accounts.push({
+        solana_instruction::AccountMeta {
+            pubkey: *program_id,
+            is_signer: false,
+            is_writable: false,
+        }
+    });
+
+    accounts.push({
+        solana_instruction::AccountMeta {
+            pubkey: *extra_account_meta_list,
+            is_signer: false,
+            is_writable: false,
+        }
+    });
+    accounts.push({
+        solana_instruction::AccountMeta {
+            pubkey: *whitelist,
+            is_signer: false,
+            is_writable: false,
+        }
+    });
+    accounts.push(solana_instruction::AccountMeta {
+        pubkey: *vault,
+        is_signer: false,
+        is_writable: false,
+    });
+    let transfer_ix = Instruction {
+        program_id: from_pubkey_to_address(&token_program),
+        accounts,
+        data: cpi_ix.data,
+    };
+    let msg = Message::new(&[withdraw_ix, transfer_ix], Some(&payer.pubkey()));
+
+    let transaction = Transaction::new(&[&payer, &user], msg, svm.latest_blockhash());
+
+    let tx = svm.send_transaction(transaction).unwrap();
+    println!("Transaction logs: {:?}", tx.logs);
+
+    tx
+}
+
 #[test]
 fn test_add_to_whitelist() {
     // Setup the test environment by initializing LiteSVM and creating a payer keypair
@@ -539,4 +647,63 @@ fn test_deposit() {
     let vault_ata_state =
         StateWithExtensionsOwned::<Account>::unpack(vault_ata_account.data).unwrap();
     assert_eq!(vault_ata_state.base.amount, 5 * LAMPORTS_PER_SOL);
+}
+
+#[test]
+fn test_withdraw() {
+    // Setup the test environment by initializing LiteSVM and creating a payer keypair
+    let (mut svm, payer, program_id) = setup();
+    let (whitelist, user_db, user, _tx) = setup_add_to_whitelist(&mut svm, &payer, &program_id);
+    let name = "Turbin3".to_string();
+    let symbol = "Tur".to_string();
+    let uri = "https://example.com/turbin3.json".to_string();
+    let (mint, _tx) = setup_create_mint(&mut svm, &payer, &program_id, &name, &symbol, &uri);
+    let amount = 20 * LAMPORTS_PER_SOL;
+    let (user_ata, _tx) = setup_mint_token(&mut svm, &payer, &program_id, &mint, &user, amount);
+    let (vault, _tx) = setup_init_vault(&mut svm, &payer, &program_id);
+    let (extra_account_meta_list, tx) =
+        setup_init_extra_account_meta(&mut svm, &payer, &mint, &program_id);
+    println!("Transaction logs(extra_account_meta_list): {:?}", tx.logs);
+    println!("u:{}", user_ata);
+    // println!("v:{}", user_ata);
+    let (vault_ata, _tx) = setup_deposit(
+        &mut svm,
+        &payer,
+        &user,
+        &user_ata,
+        &mint,
+        &vault,
+        &whitelist,
+        &user_db,
+        &extra_account_meta_list,
+        &program_id,
+    );
+
+    let _tx = setup_withdraw(
+        &mut svm,
+        &payer,
+        &user,
+        &user_ata,
+        &mint,
+        &vault,
+        &vault_ata,
+        &whitelist,
+        &user_db,
+        &extra_account_meta_list,
+        &program_id,
+    );
+
+    let vault_ata_account = svm.get_account(&vault_ata).unwrap();
+    let vault_ata_state =
+        StateWithExtensionsOwned::<Account>::unpack(vault_ata_account.data).unwrap();
+    assert_eq!(vault_ata_state.base.amount, 1 * LAMPORTS_PER_SOL);
+
+    let user_account = svm.get_account(&user_ata).unwrap();
+    let user_account_state =
+        StateWithExtensionsOwned::<spl_token_2022::state::Account>::unpack(user_account.data)
+            .unwrap();
+
+    let final_balance = 19 * LAMPORTS_PER_SOL;
+    assert_eq!(user_account_state.base.amount, final_balance);
+    println!("{:?}", user_account_state.base);
 }

@@ -1,7 +1,12 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
+use anchor_spl::token_interface::{
+    self, approve, Approve, Mint, TokenAccount, TokenInterface, TransferChecked,
+};
 
-use crate::state::Vault;
+use crate::{
+    errors::VaultError,
+    state::{UserDb, Vault},
+};
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
@@ -23,6 +28,13 @@ pub struct Withdraw<'info> {
 
     #[account(
         mut,
+        seeds = [b"user_db", user.key().as_ref()],
+        bump
+    )]
+    pub user_db: Account<'info, UserDb>,
+
+    #[account(
+        mut,
         token::mint = mint,
         token::authority = vault,
     )]
@@ -33,27 +45,30 @@ pub struct Withdraw<'info> {
 }
 
 impl<'info> Withdraw<'info> {
-    pub fn withdraw(
-        &mut self,
-        amount: u64,
-        remaining_accounts: &[AccountInfo<'info>],
-    ) -> Result<()> {
+    pub fn withdraw(&mut self, amount: u64) -> Result<()> {
         let seeds: &[&[u8]] = &[b"vault", &[self.vault.bump]];
         let signer = &[&seeds[..]];
+        require!(
+            self.user_db.deposited >= amount as u128,
+            VaultError::NotEnoughToken
+        );
 
-        let cpi_accounts = TransferChecked {
-            from: self.vault_token_account.to_account_info(),
-            mint: self.mint.to_account_info(),
-            to: self.user_token_account.to_account_info(),
-            authority: self.vault.to_account_info(),
-        };
+        let ctx = CpiContext::new_with_signer(
+            self.token_program.to_account_info(),
+            Approve {
+                to: self.vault_token_account.to_account_info(),
+                delegate: self.user.to_account_info(),
+                authority: self.vault.to_account_info(),
+            },
+            signer,
+        );
 
-        let cpi_ctx =
-            CpiContext::new_with_signer(self.token_program.to_account_info(), cpi_accounts, signer)
-                .with_remaining_accounts(remaining_accounts.to_vec());
-
-        token_interface::transfer_checked(cpi_ctx, amount, self.mint.decimals)?;
-
+        approve(ctx, amount)?;
+        self.user_db.deposited = self
+            .user_db
+            .deposited
+            .checked_sub(amount as u128)
+            .ok_or(VaultError::Underflow)?;
         Ok(())
     }
 }

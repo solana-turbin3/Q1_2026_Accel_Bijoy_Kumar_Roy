@@ -49,11 +49,8 @@ pub mod transfer_enabled_vault {
         Ok(())
     }
 
-    pub fn withdraw<'info>(
-        ctx: Context<'_, '_, '_, 'info, Withdraw<'info>>,
-        amount: u64,
-    ) -> Result<()> {
-        ctx.accounts.withdraw(amount, ctx.remaining_accounts)?;
+    pub fn withdraw<'info>(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+        ctx.accounts.withdraw(amount)?;
         Ok(())
     }
 

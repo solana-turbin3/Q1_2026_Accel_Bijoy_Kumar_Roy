@@ -22,7 +22,7 @@ use crate::state::{Vault, Whitelist};
 pub struct TransferHook<'info> {
     #[account(
         token::mint = mint, 
-        token::authority = owner,
+        // token::authority = owner,
     )]
     pub source_token: InterfaceAccount<'info, TokenAccount>,
     pub mint: InterfaceAccount<'info, Mint>,
